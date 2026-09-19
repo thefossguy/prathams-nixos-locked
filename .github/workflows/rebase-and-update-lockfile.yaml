@@ -1,0 +1,47 @@
+name: Rebase and update lockfile
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/15 * * * *'
+
+jobs:
+  rebase-and-update-lockfile:
+    name: Rebase and update lockfile
+    runs-on: ubuntu-latest
+    permissions:
+      contents: "write"
+    steps:
+      - uses: actions/checkout@main
+        with:
+          ref: master
+      - uses: NixOS/nix-installer-action@main
+        with:
+          installer-version: latest
+          extra-conf: |
+            experimental-features = nix-command flakes
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+      - name: Rebase and update lockfile
+        run: |
+          set -xeuf -o pipefail
+
+          git config user.name 'prathams-nixos-locked[bot]'
+          git config user.email 'prathams-nixos-locked[bot]@users.noreply.github.com'
+
+          git switch master
+          git remote add upstream https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/thefossguy/prathams-nixos.git
+          git fetch upstream master
+          git merge --ff-only upstream/master
+          git push origin master
+
+          git fetch origin
+          git checkout -b locked origin/locked
+          cp flake.lock flake.lock.old
+          nix flake archive --json --pretty
+          nix flake update
+          if ! diff flake.lock flake.lock.old; then
+              git add flake.lock
+              git commit -m '[BOT]: `nix flake update`'
+          fi
+          nix flake archive --json --pretty
+          git rebase master
+          git push -f origin locked
