@@ -5,8 +5,51 @@ on:
     - cron: '*/15 * * * *'
 
 jobs:
-  rebase-and-update-lockfile:
-    name: Rebase and update lockfile
+  fetch-merge-and-push-master:
+    name: Fetch, merge and push `master`
+    runs-on: ubuntu-latest
+    permissions:
+      contents: "write"
+    steps:
+      - uses: actions/checkout@main
+        with:
+          ref: master
+      - name: Fetch, merge and push `master`
+        run: |
+          set -xeuf -o pipefail
+
+          git switch master
+          git remote add upstream https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/thefossguy/prathams-nixos.git
+          git fetch upstream master
+          git merge --ff-only upstream/master
+          git push origin master
+
+
+  rebase-and-push-locked:
+    name: Rebase and push `locked`
+    runs-on: ubuntu-latest
+    permissions:
+      contents: "write"
+    steps:
+      - uses: actions/checkout@main
+        with:
+          ref: master
+      - name: Rebase and push `locked`
+        run: |
+          set -xeuf -o pipefail
+
+          git fetch origin
+          git checkout -b locked origin/locked
+
+          if git rebase --abort master; then
+              git push origin locked
+          else
+              git push -f origin master:locked
+          fi
+
+
+  update-lockfile:
+    name: Update lockfile
     runs-on: ubuntu-latest
     permissions:
       contents: "write"
@@ -20,21 +63,16 @@ jobs:
           extra-conf: |
             experimental-features = nix-command flakes
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - name: Rebase and update lockfile
+      - name: Update lockfile
         run: |
           set -xeuf -o pipefail
 
           git config user.name 'prathams-nixos-locked[bot]'
           git config user.email 'prathams-nixos-locked[bot]@users.noreply.github.com'
 
-          git switch master
-          git remote add upstream https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/thefossguy/prathams-nixos.git
-          git fetch upstream master
-          git merge --ff-only upstream/master
-          git push origin master
-
           git fetch origin
           git checkout -b locked origin/locked
+
           cp flake.lock flake.lock.old
           nix flake archive --json --pretty
           nix flake update
@@ -43,5 +81,5 @@ jobs:
               git commit -m '[BOT]: `nix flake update`'
           fi
           nix flake archive --json --pretty
-          git rebase master
-          git push -f origin locked
+
+          git push origin locked
