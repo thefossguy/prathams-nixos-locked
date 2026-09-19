@@ -34,7 +34,7 @@ jobs:
           git push origin master
 
           git fetch origin
-          git checkout -b locked master
+          git checkout -b locked origin/locked
           cp flake.lock flake.lock.old
           nix flake archive --json --pretty
           nix flake update
